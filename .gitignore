@@ -1,0 +1,18 @@
+node_modules/
+
+# Secrets
+.env
+.env.local
+
+# SQLite
+*.db
+*.db-shm
+*.db-wal
+
+# Runtime cache (regenerated at startup)
+coingecko_yearly_cache.json
+cryptocompare_cache.json
+
+# Misc
+.DS_Store
+*.log
