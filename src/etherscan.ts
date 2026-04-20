@@ -5,6 +5,27 @@ const CONCURRENCY = 5; // Etherscan free tier: 5 req/sec
 
 export const ETH_SENTINEL = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
 
+// ── Supported EVM chains via Etherscan V2 multichain API ────────────────────
+export interface ChainInfo {
+  chainId: number;
+  name: string;            // display: 'Ethereum', 'BNB Chain'
+  nativeSymbol: string;    // 'ETH', 'BNB', 'POL', 'AVAX'
+  nativeName: string;
+  nativeCgId: string;      // CoinGecko id for native price lookup
+  cgPlatform: string;      // CoinGecko platform slug for contract lookups
+  rpcUrl: string;          // public RPC for tx lookups
+}
+
+export const CHAINS: Record<string, ChainInfo> = {
+  eth:       { chainId: 1,     name: 'Ethereum',  nativeSymbol: 'ETH',  nativeName: 'Ethereum',  nativeCgId: 'ethereum',               cgPlatform: 'ethereum',            rpcUrl: 'https://ethereum.publicnode.com' },
+  bsc:       { chainId: 56,    name: 'BNB Chain', nativeSymbol: 'BNB',  nativeName: 'BNB',       nativeCgId: 'binancecoin',            cgPlatform: 'binance-smart-chain', rpcUrl: 'https://bsc.publicnode.com' },
+  polygon:   { chainId: 137,   name: 'Polygon',   nativeSymbol: 'POL',  nativeName: 'Polygon',   nativeCgId: 'polygon-ecosystem-token', cgPlatform: 'polygon-pos',         rpcUrl: 'https://polygon-bor.publicnode.com' },
+  arbitrum:  { chainId: 42161, name: 'Arbitrum',  nativeSymbol: 'ETH',  nativeName: 'Ethereum',  nativeCgId: 'ethereum',               cgPlatform: 'arbitrum-one',        rpcUrl: 'https://arbitrum-one.publicnode.com' },
+  optimism:  { chainId: 10,    name: 'Optimism',  nativeSymbol: 'ETH',  nativeName: 'Ethereum',  nativeCgId: 'ethereum',               cgPlatform: 'optimistic-ethereum', rpcUrl: 'https://optimism.publicnode.com' },
+  avalanche: { chainId: 43114, name: 'Avalanche', nativeSymbol: 'AVAX', nativeName: 'Avalanche', nativeCgId: 'avalanche-2',            cgPlatform: 'avalanche',           rpcUrl: 'https://avalanche-c-chain.publicnode.com' },
+  base:      { chainId: 8453,  name: 'Base',      nativeSymbol: 'ETH',  nativeName: 'Ethereum',  nativeCgId: 'ethereum',               cgPlatform: 'base',                rpcUrl: 'https://base.publicnode.com' },
+};
+
 export interface WalletBalance {
   contract_address: string;
   symbol: string;
@@ -41,13 +62,14 @@ class Semaphore {
 
 async function etherscanGet<T = any>(
   sem: Semaphore,
+  chainId: number,
   params: Record<string, string | number>,
 ): Promise<T> {
   const release = await sem.acquire();
   try {
     const full = new URLSearchParams({
       ...Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)])),
-      chainid: '1',
+      chainid: String(chainId),
       ...(settings.etherscan_api_key ? { apikey: settings.etherscan_api_key } : {}),
     });
     const controller = new AbortController();
@@ -68,8 +90,12 @@ async function etherscanGet<T = any>(
 
 // ── Individual calls ────────────────────────────────────────────────────────
 
-async function fetchEthBalance(sem: Semaphore, address: string): Promise<number> {
-  const data = await etherscanGet<{ status: string; result: string }>(sem, {
+async function fetchEthBalance(
+  sem: Semaphore,
+  chainId: number,
+  address: string,
+): Promise<number> {
+  const data = await etherscanGet<{ status: string; result: string }>(sem, chainId, {
     module: 'account',
     action: 'balance',
     address,
@@ -88,6 +114,7 @@ interface TokenContract {
 
 async function fetchTokenContracts(
   sem: Semaphore,
+  chainId: number,
   address: string,
 ): Promise<TokenContract[]> {
   const data = await etherscanGet<{
@@ -98,7 +125,7 @@ async function fetchTokenContracts(
       tokenName?: string;
       tokenDecimal?: string;
     }>;
-  }>(sem, {
+  }>(sem, chainId, {
     module: 'account',
     action: 'tokentx',
     address,
@@ -128,11 +155,12 @@ async function fetchTokenContracts(
 
 async function fetchTokenBalance(
   sem: Semaphore,
+  chainId: number,
   address: string,
   contract: TokenContract,
 ): Promise<WalletBalance | null> {
   try {
-    const data = await etherscanGet<{ status: string; result: string }>(sem, {
+    const data = await etherscanGet<{ status: string; result: string }>(sem, chainId, {
       module: 'account',
       action: 'tokenbalance',
       contractaddress: contract.contract_address,
@@ -157,26 +185,29 @@ async function fetchTokenBalance(
 
 export async function fetchWalletBalances(
   address: string,
+  chainSlug: string = 'eth',
 ): Promise<WalletBalance[]> {
+  const chain = CHAINS[chainSlug];
+  if (!chain) throw new Error(`Unknown chain: ${chainSlug}`);
   const sem = new Semaphore(CONCURRENCY);
 
-  const [ethBalance, contracts] = await Promise.all([
-    fetchEthBalance(sem, address),
-    fetchTokenContracts(sem, address),
+  const [nativeBalance, contracts] = await Promise.all([
+    fetchEthBalance(sem, chain.chainId, address),
+    fetchTokenContracts(sem, chain.chainId, address),
   ]);
 
   const tokenResults = await Promise.all(
-    contracts.map((c) => fetchTokenBalance(sem, address, c)),
+    contracts.map((c) => fetchTokenBalance(sem, chain.chainId, address, c)),
   );
 
   const balances: WalletBalance[] = [];
-  if (ethBalance > 0) {
+  if (nativeBalance > 0) {
     balances.push({
       contract_address: ETH_SENTINEL,
-      symbol: 'ETH',
-      name: 'Ethereum',
+      symbol: chain.nativeSymbol,
+      name: chain.nativeName,
       decimals: 18,
-      balance: ethBalance,
+      balance: nativeBalance,
     });
   }
   for (const r of tokenResults) if (r) balances.push(r);

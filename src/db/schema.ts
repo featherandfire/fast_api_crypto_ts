@@ -51,6 +51,7 @@ export const coins = sqliteTable('coins', {
   last_updated: text('last_updated'),
   circulating_supply: text('circulating_supply'),
   max_supply: text('max_supply'),
+  contract_address: text('contract_address'),  // on-chain contract/mint, for fee lookups
 });
 
 export const holdings = sqliteTable(

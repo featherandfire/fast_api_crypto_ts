@@ -228,6 +228,8 @@ function dashApp() {
     portfolios: [],
     activePortfolioId: null,
     portfolioDetail: null,
+    lastBuyFees: {},          // holdingId -> 'loading' | 'unavailable' | { router, fee_display, fee_sol }
+    activeWalletFilter: null, // when set, the holdings table shows only this wallet's rows
     loadingPortfolio: false,
     _refreshTimer: null,
 
@@ -256,8 +258,12 @@ function dashApp() {
     holdingAvgPrice: '',
     addingHolding: false,
 
-    // Wallet import
+    // Wallet import — auto-probes all supported EVM chains + Solana in one shot
     walletAddress: '',
+    txHash: '',
+    txResolving: false,
+    txResolveInfo: '',
+    txResolveError: '',
     walletTokens: [],
     walletLoading: false,
     walletError: '',
@@ -272,15 +278,6 @@ function dashApp() {
     lookupLoading: false,
     lookupResult: null,
     lookupError: '',
-
-    // Paxos
-    paxosBalances: [],
-    paxosPrices: [],
-    paxosMarkets: [],
-    paxosLoading: false,
-    paxosError: '',
-    _paxosCache: {},
-    paxosPinned: null,
 
     // Marketplace
     marketplaceCoins: [],
@@ -341,14 +338,54 @@ function dashApp() {
     async loadPortfolioDetail() {
       if (!this.activePortfolioId) return;
       this.loadingPortfolio = true;
+      this.activeWalletFilter = null;  // reset filter when the portfolio reloads
       try {
         this.portfolioDetail = await apiFetch(`/portfolios/${this.activePortfolioId}`);
         await this.$nextTick();
         this.renderPieChart();
+        this.loadLastBuyFees();
       } catch (e) {
         Alpine.store('toast').show(e.message, 'error');
       } finally {
         this.loadingPortfolio = false;
+      }
+    },
+
+    // For each holding, fetch the last-buy fee breakdown on the correct
+    // chain (EVM via Etherscan, Solana via RPC). Holdings without a wallet
+    // or unknown address format are marked unavailable.
+    async loadLastBuyFees() {
+      const SOL_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+      const EVM_RE = /^0x[0-9a-fA-F]{40}$/;
+      const holdings = this.portfolioDetail?.holdings ?? [];
+      const nextState = {};
+      const jobs = [];
+      for (const h of holdings) {
+        const addr = h.wallet_address ?? '';
+        let url = null;
+        if (EVM_RE.test(addr)) {
+          // Default to Ethereum; if the import tagged the holding with a
+          // different chain later, the url can be parameterized.
+          url = `/wallet/eth/${encodeURIComponent(addr)}/last-buy-fees?coingecko_id=${encodeURIComponent(h.coin.coingecko_id)}`;
+        } else if (SOL_RE.test(addr)) {
+          url = `/wallet/solana/${encodeURIComponent(addr)}/last-buy-fees?coingecko_id=${encodeURIComponent(h.coin.coingecko_id)}`;
+        }
+        if (url) {
+          nextState[h.id] = 'loading';
+          jobs.push({ id: h.id, url });
+        } else {
+          nextState[h.id] = 'unavailable';
+        }
+      }
+      this.lastBuyFees = nextState;
+
+      for (const job of jobs) {
+        try {
+          const fees = await apiFetch(job.url);
+          this.lastBuyFees = { ...this.lastBuyFees, [job.id]: fees };
+        } catch {
+          this.lastBuyFees = { ...this.lastBuyFees, [job.id]: 'unavailable' };
+        }
       }
     },
 
@@ -413,6 +450,26 @@ function dashApp() {
       this.walletAddress = '';
       this.walletTokens = [];
       this.walletError = '';
+      this.txHash = '';
+      this.txResolveInfo = '';
+      this.txResolveError = '';
+    },
+
+    async resolveWalletFromTx() {
+      const hash = this.txHash.trim();
+      if (!hash) return;
+      this.txResolving = true;
+      this.txResolveInfo = '';
+      this.txResolveError = '';
+      try {
+        const info = await apiFetch(`/wallet/from-tx/${encodeURIComponent(hash)}`);
+        this.walletAddress = info.address;
+        this.txResolveInfo = `Found wallet on ${info.chain_name} — ready to fetch below.`;
+      } catch (e) {
+        this.txResolveError = e.message;
+      } finally {
+        this.txResolving = false;
+      }
     },
 
     async fetchWalletTokens() {
@@ -422,7 +479,7 @@ function dashApp() {
       this.walletError = '';
       this.walletTokens = [];
       try {
-        const tokens = await apiFetch(`/wallet/eth/${encodeURIComponent(addr)}`);
+        const tokens = await apiFetch(`/wallet/all/${encodeURIComponent(addr)}`);
         this.walletTokens = tokens.map(t => ({ ...t, selected: t.matched }));
       } catch (e) {
         this.walletError = e.message;
@@ -432,25 +489,42 @@ function dashApp() {
     },
 
     async importSelectedWalletTokens() {
-      const toImport = this.walletTokens.filter(t => t.selected && t.matched);
+      const toImport = this.walletTokens.filter(t => t.selected);
       if (!toImport.length) return;
       this.walletImporting = true;
-      const walletAddr = this.walletAddress.trim().toLowerCase();
+      // EVM (0x…) is case-insensitive — lowercase for consistency.
+      // Solana base58 is case-sensitive — preserve as-is.
+      const raw = this.walletAddress.trim();
+      const walletAddr = /^0x[0-9a-fA-F]+$/.test(raw) ? raw.toLowerCase() : raw;
       let successCount = 0;
+      let dupCount = 0;
       for (const token of toImport) {
+        // Matched: use CoinGecko slug. Unmatched: fall back to the contract
+        // address as the coin id and pass along the on-chain symbol/name so
+        // the backend can create a "manual" coin entry (no price data).
+        const coingeckoId = token.matched ? token.coingecko_id : token.contract_address;
+        const body = {
+          coingecko_id: coingeckoId,
+          amount: token.amount,
+          avg_buy_price: null,
+          wallet_address: walletAddr,
+          contract_address: token.contract_address,
+        };
+        if (!token.matched) {
+          body.symbol = token.symbol;
+          body.name = token.name;
+          body.image_url = token.image_url;
+        }
         try {
           await apiFetch(`/portfolios/${this.activePortfolioId}/holdings`, {
             method: 'POST',
-            body: JSON.stringify({
-              coingecko_id: token.coingecko_id,
-              amount: token.amount,
-              avg_buy_price: null,
-              wallet_address: walletAddr,
-            }),
+            body: JSON.stringify(body),
           });
           successCount++;
         } catch (e) {
-          if (!e.message.includes('already in portfolio')) {
+          if (e.message.includes('already in portfolio')) {
+            dupCount++;
+          } else {
             Alpine.store('toast').show(`Skipped ${token.symbol}: ${e.message}`, 'error');
           }
         }
@@ -459,7 +533,15 @@ function dashApp() {
       if (successCount > 0) {
         await this.loadPortfolioDetail();
         this.closeAddHolding();
-        Alpine.store('toast').show(`Imported ${successCount} holding${successCount > 1 ? 's' : ''}`);
+        const msg = dupCount > 0
+          ? `Imported ${successCount} new holding${successCount > 1 ? 's' : ''} — skipped ${dupCount} already in portfolio`
+          : `Imported ${successCount} holding${successCount > 1 ? 's' : ''}`;
+        Alpine.store('toast').show(msg);
+      } else if (dupCount > 0) {
+        // Nothing new imported — every selected token was already in the portfolio
+        // for this wallet. Surface that clearly rather than silently closing.
+        this.closeAddHolding();
+        Alpine.store('toast').show('This wallet is already in your portfolio', 'error');
       }
     },
 
@@ -682,147 +764,78 @@ function dashApp() {
       }
     },
 
-    // ── Paxos ─────────────────────────────────────────────────────────────────
+    paxosCoinDescription(symbol) { return COIN_DESCRIPTIONS[symbol.toUpperCase()] || null; },
 
-    async loadPaxos() {
-      if (this.paxosLoading) return;
-      this.paxosLoading = true;
-      this.paxosError = '';
-      try {
-        // ── Load localStorage caches ────────────────────────────────────────
-        // Icons:      no expiry  — image URLs essentially never change
-        // Markets:    7 days    — Paxos market list changes very rarely
-        // 1Y ranges:  24 hours  — high/low + volatility from same CoinGecko data
-        // Long range: 24 hours  — 1.5Y change from CryptoCompare
-        let iconCache      = lsGet('icon_cache')  || {};
-        let marketsCache   = lsGet('markets_cache');
-        let yearlyCache    = lsGet('yearly_cache')   || {};
-        let longRangeCache = lsGet('long_range_cache')     || {};
-
-        // Only fetch topCoins if not already loaded
-        if (this.topCoins.length < 200) {
-          try { this.topCoins = await apiFetch('/coins/top?limit=200'); } catch {}
-        }
-
-        // Build symbol→coin lookup map once (avoids repeated .find() in row loops)
-        const cgBySymbol = {};
-        for (const c of this.topCoins) cgBySymbol[c.symbol.toUpperCase()] = c;
-
-        // Skip cached endpoints — only hit API when cache is stale
-        const [prices, freshMarkets, balances] = await Promise.all([
-          apiFetch('/paxos/prices'),
-          marketsCache ? Promise.resolve(null) : apiFetch('/paxos/markets').catch(() => null),
-          apiFetch('/paxos/balances').catch(() => null),
-        ]);
-
-        // Persist fresh markets (7 days)
-        if (freshMarkets) {
-          marketsCache = freshMarkets;
-          lsSet('markets_cache', freshMarkets, 7 * 24 * 3600);
-        }
-
-        const priceMap  = {};
-        if (Array.isArray(prices)) prices.forEach(p => { priceMap[p.market] = p; });
-        const usdMarkets = (Array.isArray(marketsCache) ? marketsCache.filter(m => m.quote_asset === 'USD') : [])
-          .map(m => {
-            const sym = m.base_asset.toUpperCase();
-            const cg  = cgBySymbol[sym];
-            if (cg?.image_url) iconCache[sym] = { url: cg.image_url, name: cg.name };
-            else if (cg?.name && iconCache[sym]) iconCache[sym].name = cg.name;
-            return { ...m, image: iconCache[sym]?.url || null };
-          });
-
-        lsSet('icon_cache', iconCache, null);
-
-        this.paxosMarkets  = usdMarkets;
-        this.paxosBalances = Array.isArray(balances) ? balances : [];
-
-        // Build table rows immediately — 1Y High/Low filled from cache or left as null
-        this.paxosPrices = usdMarkets.map(m => {
-          const cached     = this._paxosCache[m.market] || {};
-          const ticker     = priceMap[m.market] || {};
-          const sym        = m.base_asset.toUpperCase();
-          const cg         = cgBySymbol[sym];
-          const paxosLast  = parseFloat(ticker.last_execution?.price);
-          const cgPrice    = cg?.current_price_usd ?? null;
-          const yearly     = yearlyCache[cg?.coingecko_id] || {};
-          const lr         = longRangeCache[sym] || {};
-          const fresh = {
-            image:       iconCache[sym]?.url || null,
-            coinName:    cg?.name ?? iconCache[sym]?.name ?? null,
-            mktCap:      cg?.market_cap ?? null,
-            change200d:  cg?.price_change_200d ?? null,
-            change1y:    cg?.price_change_1y   ?? null,
-            change1_5y:  lr.change1_5y ?? null,
-            vol90d:      yearly.vol_90d  ?? null,
-            vol180d:     yearly.vol_180d ?? null,
-            vol365d:     yearly.vol_365d ?? null,
-            last:        ((!isNaN(paxosLast) && paxosLast > 0) ? ticker.last_execution?.price : cgPrice) ?? null,
-            bid:         ticker.best_bid?.price || null,
-            ask:         ticker.best_ask?.price || null,
-            spread:      (ticker.best_bid?.price && ticker.best_ask?.price)
-                           ? (parseFloat(ticker.best_ask.price) - parseFloat(ticker.best_bid.price))
-                           : null,
-            high:        yearly.high_1y ?? null,
-            low:         yearly.low_1y  ?? null,
-            circulating: cg?.circulating_supply ?? null,
-            hardCap:     HARD_CAPS[sym] !== undefined ? HARD_CAPS[sym] : (cg?.max_supply ?? null),
-          };
-          const merged = {};
-          for (const key of Object.keys(fresh)) merged[key] = fresh[key] ?? cached[key] ?? null;
-          this._paxosCache[m.market] = { ...cached, ...merged };
-          return { ...m, ...merged };
-        }).sort((a, b) => (parseFloat(b.last) || 0) - (parseFloat(a.last) || 0));
-
-        // Fetch 1Y ranges in background — only for Paxos market coins not yet cached
-        const paxosCgIds = usdMarkets
-          .map(m => cgBySymbol[m.base_asset.toUpperCase()]?.coingecko_id)
-          .filter(id => id && !yearlyCache[id]);
-        if (paxosCgIds.length) {
-          apiFetch(`/coins/yearly-ranges?ids=${paxosCgIds.join(',')}`).then(fresh => {
-            if (!fresh || !Object.keys(fresh).length) return;
-            yearlyCache = { ...yearlyCache, ...fresh };
-            lsSet('yearly_cache', yearlyCache, 24 * 3600);
-            this.paxosPrices = this.paxosPrices.map(p => {
-              const cg = cgBySymbol[p.base_asset.toUpperCase()];
-              const yr = fresh[cg?.coingecko_id];
-              if (!yr) return p;
-              const updated = { ...p, high: yr.high_1y ?? p.high, low: yr.low_1y ?? p.low, vol90d: yr.vol_90d ?? p.vol90d, vol180d: yr.vol_180d ?? p.vol180d, vol365d: yr.vol_365d ?? p.vol365d };
-              this._paxosCache[p.market] = { ...this._paxosCache[p.market], ...updated };
-              return updated;
-            });
-          }).catch(() => {});
-        }
-
-        // Fetch 1.5Y & 3Y changes from CryptoCompare (served from server cache)
-        const paxosSymsForLR = usdMarkets
-          .map(m => m.base_asset.toUpperCase())
-          .filter(s => !longRangeCache[s]);
-        if (paxosSymsForLR.length) {
-          apiFetch(`/cryptocompare/changes?symbols=${paxosSymsForLR.join(',')}&days=548`).then(fresh => {
-            if (!fresh || !Object.keys(fresh).length) return;
-            for (const [sym, data] of Object.entries(fresh)) {
-              longRangeCache[sym] = { change1_5y: data[548] ?? null };
-            }
-            lsSet('long_range_cache', longRangeCache, 24 * 3600);
-            this.paxosPrices = this.paxosPrices.map(p => {
-              const lr = longRangeCache[p.base_asset.toUpperCase()];
-              if (!lr) return p;
-              const updated = { ...p, change1_5y: lr.change1_5y ?? p.change1_5y };
-              this._paxosCache[p.market] = { ...this._paxosCache[p.market], ...updated };
-              return updated;
-            });
-          }).catch(() => {});
-        }
-
-      } catch (e) {
-        this.paxosError = e.message;
-      } finally {
-        this.paxosLoading = false;
-      }
+    // Current portfolio's holdings, narrowed to the active wallet filter
+    // when one is set (clicking a wallet chip above the table).
+    filteredHoldings() {
+      const all = this.portfolioDetail?.holdings ?? [];
+      if (!this.activeWalletFilter) return all;
+      return all.filter((h) => h.wallet_address === this.activeWalletFilter);
     },
 
-    paxosCoinDescription(symbol) { return COIN_DESCRIPTIONS[symbol.toUpperCase()] || null; },
+    // Unique list of wallet addresses across the current portfolio's holdings.
+    portfolioWallets() {
+      const holdings = this.portfolioDetail?.holdings ?? [];
+      const seen = new Set();
+      const out = [];
+      for (const h of holdings) {
+        if (h.wallet_address && !seen.has(h.wallet_address)) {
+          seen.add(h.wallet_address);
+          out.push(h.wallet_address);
+        }
+      }
+      return out;
+    },
+
+    walletIsSolana(addr) {
+      return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr ?? '');
+    },
+
+    // Deterministic 0..5 from any string — used to pick a placeholder shape
+    // for unknown-icon coins. Same input always yields the same shape, so a
+    // given coin looks consistent across renders.
+    unknownCoinShape(key) {
+      if (!key) return 0;
+      let h = 0;
+      for (let i = 0; i < key.length; i++) {
+        h = ((h << 5) - h + key.charCodeAt(i)) | 0;
+      }
+      return Math.abs(h) % 6;
+    },
+
+    // Categorize detected router names into the three roles that actually
+    // matter end-to-end: who fronted the UX (Platform), who found the route
+    // (DEX Routing), and which pool filled the order (Liquidity Pool).
+    categorizeRouters(routers) {
+      const PLATFORM = new Set(['Phantom Swap']);
+      const ROUTING  = new Set(['Jupiter', 'Jupiter v3', 'Jupiter v4', 'OKX DEX', 'OKX DEX Aggregator', 'OKX Labs', 'Dex.guru']);
+      const out = { platform: null, dex_routing: null, liquidity_pool: null };
+      for (const r of (routers ?? [])) {
+        if (PLATFORM.has(r) && !out.platform) out.platform = r;
+        else if (ROUTING.has(r) && !out.dex_routing) out.dex_routing = r;
+        else if (!out.liquidity_pool) out.liquidity_pool = r;
+      }
+      return out;
+    },
+
+    // Combine fee-party amounts into a single display string. Stablecoin-
+    // denominated fees collapse to "$X.XX"; non-stable fees keep token units.
+    totalFeeLabel(parties) {
+      if (!parties || !parties.length) return '';
+      const stableTotal = parties.filter(p => p.is_stable).reduce((s, p) => s + p.amount, 0);
+      const byMint = {};
+      for (const p of parties.filter(p => !p.is_stable)) {
+        byMint[p.mint] = byMint[p.mint] || { amount: 0, symbol: p.symbol };
+        byMint[p.mint].amount += p.amount;
+      }
+      const parts = [];
+      if (stableTotal > 0) parts.push('$' + stableTotal.toFixed(2));
+      for (const { amount, symbol } of Object.values(byMint)) {
+        parts.push(fmtAmount(amount) + ' ' + symbol);
+      }
+      return parts.join(' + ');
+    },
 
     coinCollateral(symbol) { return _collateralMap[symbol.toUpperCase()] || null; },
 
@@ -838,11 +851,6 @@ function dashApp() {
 
     coinYieldTypes(symbol) { return COIN_YIELD_TYPES[symbol.toUpperCase()] || null; },
 
-
-    paxosCoinImage(symbol) {
-      const match = this.topCoins.find(c => c.symbol.toUpperCase() === symbol.toUpperCase());
-      return match?.image_url || null;
-    },
 
     // ── Marketplace ───────────────────────────────────────────────────────────
 
@@ -983,29 +991,23 @@ function dashApp() {
 
       // Sort/filter by dropdown
       switch (this.mkSort) {
+        case 'price_asc':
+          coins = [...coins]
+            .filter(c => c.last != null)
+            .sort((a, b) => a.last - b.last);
+          break;
+        case 'vol_desc':
+          coins = [...coins].sort((a, b) => (b.vol90d || 0) - (a.vol90d || 0));
+          break;
+        case 'vol_asc':
+          coins = [...coins].sort((a, b) => (a.vol90d ?? Infinity) - (b.vol90d ?? Infinity));
+          break;
         case 'stablecoin':
           coins = coins.filter(c => STABLES.has(c.base_asset));
           break;
-        case 'top10':
-          coins = [...coins].sort((a, b) => (b.last || 0) - (a.last || 0)).slice(0, 10);
-          break;
-        case 'most_volatile':
-          coins = [...coins].sort((a, b) => (b.vol90d || 0) - (a.vol90d || 0));
-          break;
-        case 'least_volatile':
-          coins = [...coins].sort((a, b) => (a.vol90d || 999) - (b.vol90d || 999));
-          break;
-        case 'vol_low':
-          coins = coins.filter(c => c.vol90d != null && c.vol90d < 0.20);
-          break;
-        case 'vol_moderate':
-          coins = coins.filter(c => c.vol90d != null && c.vol90d >= 0.20 && c.vol90d < 0.55);
-          break;
-        case 'vol_high':
-          coins = coins.filter(c => c.vol90d != null && c.vol90d >= 0.55 && c.vol90d < 0.85);
-          break;
-        case 'vol_very_high':
-          coins = coins.filter(c => c.vol90d != null && c.vol90d >= 0.85);
+        case 'income_yield':
+          // Coins with no parseable APR fall to the bottom.
+          coins = [...coins].sort((a, b) => (coinYieldApr(b.base_asset) ?? -1) - (coinYieldApr(a.base_asset) ?? -1));
           break;
         default: // price_desc
           coins = [...coins].sort((a, b) => {
@@ -1046,11 +1048,6 @@ function dashApp() {
       if (n < 0.01)    return '$' + n.toFixed(6).replace(/\.?0+$/, '');
       if (n < 1)       return '$' + n.toFixed(4);
       return fmtUSD(n);
-    },
-
-    paxosSpread(p) {
-      if (p.spread == null) return '—';
-      return fmtUSD(p.spread);
     },
 
     lookupConfidenceClass(c) {

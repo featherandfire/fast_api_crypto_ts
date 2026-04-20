@@ -30,7 +30,15 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-async function getOrCreateCoin(coingeckoId: string): Promise<Coin | null> {
+async function getOrCreateCoin(
+  coingeckoId: string,
+  fallback?: {
+    symbol?: string | null;
+    name?: string | null;
+    image_url?: string | null;
+    contract_address?: string | null;
+  },
+): Promise<Coin | null> {
   const existing = db
     .select()
     .from(coins)
@@ -40,22 +48,42 @@ async function getOrCreateCoin(coingeckoId: string): Promise<Coin | null> {
 
   const data = await fetchPrices([coingeckoId]);
   const d = data[coingeckoId];
-  if (!d) return null;
 
-  db.insert(coins)
-    .values({
-      coingecko_id: coingeckoId,
-      symbol: d.symbol,
-      name: d.name,
-      current_price_usd: d.current_price_usd != null ? String(d.current_price_usd) : null,
-      price_change_24h: d.price_change_24h != null ? String(d.price_change_24h) : null,
-      market_cap: d.market_cap != null ? String(d.market_cap) : null,
-      image_url: d.image_url,
-      last_updated: nowIso(),
-    })
-    .run();
+  if (d) {
+    db.insert(coins)
+      .values({
+        coingecko_id: coingeckoId,
+        symbol: d.symbol,
+        name: d.name,
+        current_price_usd: d.current_price_usd != null ? String(d.current_price_usd) : null,
+        price_change_24h: d.price_change_24h != null ? String(d.price_change_24h) : null,
+        market_cap: d.market_cap != null ? String(d.market_cap) : null,
+        image_url: d.image_url,
+        last_updated: nowIso(),
+        contract_address: fallback?.contract_address ?? null,
+      })
+      .run();
+    return db.select().from(coins).where(eq(coins.coingecko_id, coingeckoId)).get() ?? null;
+  }
 
-  return db.select().from(coins).where(eq(coins.coingecko_id, coingeckoId)).get() ?? null;
+  // CoinGecko doesn't know this one — create a "manual" entry from caller-provided
+  // metadata (e.g. symbol/name read off the ERC-20 contract). These rows have no
+  // price and will show — in $ columns.
+  if (fallback?.symbol && fallback?.name) {
+    db.insert(coins)
+      .values({
+        coingecko_id: coingeckoId,
+        symbol: fallback.symbol,
+        name: fallback.name,
+        image_url: fallback.image_url ?? null,
+        last_updated: nowIso(),
+        contract_address: fallback.contract_address ?? null,
+      })
+      .run();
+    return db.select().from(coins).where(eq(coins.coingecko_id, coingeckoId)).get() ?? null;
+  }
+
+  return null;
 }
 
 async function refreshHoldingPrices(rows: { holding: Holding; coin: Coin }[]) {
@@ -95,6 +123,7 @@ function computeHoldingValue(h: HoldingWithCoin) {
 
   return {
     id: h.id,
+    wallet_address: h.wallet_address,
     amount,
     avg_buy_price: toFloat(h.avg_buy_price),
     created_at: h.created_at,
@@ -225,6 +254,14 @@ export async function portfolioRouter(app: FastifyInstance) {
       amount: number;
       avg_buy_price?: number | null;
       wallet_address?: string | null;
+      // Optional fallback metadata used when coingecko_id isn't a real
+      // CoinGecko slug (e.g. an unlisted ERC-20 being imported from a wallet).
+      symbol?: string | null;
+      name?: string | null;
+      image_url?: string | null;
+      // On-chain contract (EVM) or mint (Solana) — required for EVM
+      // Last-Buy-Fees lookups since Etherscan queries by contract address.
+      contract_address?: string | null;
     };
   }>('/api/portfolios/:id/holdings', async (req, reply) => {
     const user = await getCurrentUser();
@@ -245,14 +282,24 @@ export async function portfolioRouter(app: FastifyInstance) {
       return reply.code(422).send({ detail: 'amount must be > 0' });
     }
 
-    const coin = await getOrCreateCoin(body.coingecko_id);
+    const coin = await getOrCreateCoin(body.coingecko_id, {
+      symbol: body.symbol,
+      name: body.name,
+      image_url: body.image_url,
+      contract_address: body.contract_address,
+    });
     if (!coin) {
       return reply.code(404).send({
         detail: `Coin '${body.coingecko_id}' not found on CoinGecko`,
       });
     }
 
-    const walletAddress = body.wallet_address?.toLowerCase() ?? null;
+    // EVM addresses (0x…) are case-insensitive hex — normalize to lowercase
+    // for dedup. Solana addresses are case-sensitive base58 — preserve as-is.
+    const walletAddress =
+      body.wallet_address && /^0x[0-9a-fA-F]+$/.test(body.wallet_address)
+        ? body.wallet_address.toLowerCase()
+        : body.wallet_address ?? null;
 
     // SQLite treats NULLs as distinct in UNIQUE indexes, so the lookup must
     // match NULL explicitly when no wallet is provided.

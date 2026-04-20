@@ -523,6 +523,17 @@ a:hover { color: var(--accent-hover); }
 
 .table-wrap { overflow-x: auto; }
 
+/* Holdings table: user-resizable vertically. Drag the handle in the
+   bottom-right corner to grow or shrink. */
+.holdings-table-wrap {
+  resize: vertical;
+  overflow: auto;
+  min-height: 260px;
+  max-height: 85vh;
+  height: 420px;
+  border-bottom: 1px dashed var(--border);  /* hint there's a resize edge */
+}
+
 table { width: 100%; border-collapse: collapse; }
 thead th {
   padding: 10px 12px;
@@ -947,6 +958,32 @@ tbody td:nth-child(6) {
 }
 .coin-stack-wrap:hover .coin-stack-icon { transform: translateY(-4px) scale(1.15); }
 
+/* Bounce-in on mount — coins fall and settle with a cubic-bezier damped
+   landing. Staggered so the stack animates left-to-right, each one a tiny
+   beat after the last. */
+@keyframes coin-bounce-in {
+  0%   { transform: translateY(-28px); opacity: 0; }
+  55%  { transform: translateY(3px);   opacity: 1; }
+  75%  { transform: translateY(-2px); }
+  90%  { transform: translateY(1px); }
+  100% { transform: translateY(0); }
+}
+.coin-stack-wrap .coin-stack-icon {
+  animation: coin-bounce-in 800ms cubic-bezier(.33, 1.2, .68, 1) both;
+}
+/* Stagger the first ~20 icons; anything further just uses the last delay. */
+.coin-stack-wrap:nth-child(1) .coin-stack-icon  { animation-delay: 0ms; }
+.coin-stack-wrap:nth-child(2) .coin-stack-icon  { animation-delay: 40ms; }
+.coin-stack-wrap:nth-child(3) .coin-stack-icon  { animation-delay: 80ms; }
+.coin-stack-wrap:nth-child(4) .coin-stack-icon  { animation-delay: 120ms; }
+.coin-stack-wrap:nth-child(5) .coin-stack-icon  { animation-delay: 160ms; }
+.coin-stack-wrap:nth-child(6) .coin-stack-icon  { animation-delay: 200ms; }
+.coin-stack-wrap:nth-child(7) .coin-stack-icon  { animation-delay: 240ms; }
+.coin-stack-wrap:nth-child(8) .coin-stack-icon  { animation-delay: 280ms; }
+.coin-stack-wrap:nth-child(9) .coin-stack-icon  { animation-delay: 320ms; }
+.coin-stack-wrap:nth-child(10) .coin-stack-icon { animation-delay: 360ms; }
+.coin-stack-wrap:nth-child(n+11) .coin-stack-icon { animation-delay: 400ms; }
+
 .coin-stack-tip {
   position: absolute;
   bottom: calc(100% + 6px);
@@ -1075,13 +1112,166 @@ tbody td:nth-child(6) {
 }
 
 /* ── Marketplace asset column ─────────────────────────────────────────────── */
+/* Fix the first column width and force long coin names to wrap inside it, so
+   they can't bleed into the Volatility column next door. The extra right
+   padding guarantees breathing room even at the wrap boundary. */
+.marketplace-table { table-layout: auto; }
 .marketplace-table td:first-child,
-.marketplace-table th:first-child { max-width: 120px; }
-.marketplace-table .coin-name { white-space: normal; word-wrap: break-word; }
+.marketplace-table th:first-child {
+  width: 180px;
+  max-width: 180px;
+  padding-right: 18px;
+}
+.marketplace-table td + td,
+.marketplace-table th + th { padding-left: 14px; }
+
+/* All marketplace cells: allow text to wrap so no column ever overflows */
+.marketplace-table td,
+.marketplace-table th {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  vertical-align: top;
+}
+
+/* Backed By column (8th) — narrower, content is just a short badge */
+.marketplace-table td:nth-child(8),
+.marketplace-table th:nth-child(8) {
+  width: 110px;
+  max-width: 110px;
+  white-space: normal;
+}
+
+/* Yield Types column (9th) — stack of tags doesn't need full spread */
+.marketplace-table td:nth-child(9),
+.marketplace-table th:nth-child(9) {
+  width: 180px;
+  max-width: 180px;
+  white-space: normal;
+}
+/* Allow tag text to wrap within the narrower column */
+.marketplace-table .coin-features { white-space: normal; }
+.marketplace-table .coin-yield-tag {
+  white-space: normal;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.marketplace-table .coin-name {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.3;
+}
 
 /* Dim rows with missing volatility data — flagged as "less liquid / less-tracked" */
 .marketplace-table tr.mk-row-low-data td { opacity: 0.45; }
 .marketplace-table tr.mk-row-low-data td:first-child { opacity: 0.65; }  /* keep the coin name a touch more legible */
+
+/* Chain tag next to token name in wallet import list */
+.token-chain-tag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  margin-left: 6px;
+  border-radius: 3px;
+  background: rgba(180,77,255,.12);
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  vertical-align: middle;
+}
+
+/* Generic "unknown coin" fallbacks — 6 geometric shapes + color variants,
+   picked deterministically from the coin's id so every unknown coin looks
+   distinct but stable across renders. */
+.coin-stack-fallback,
+.coin-img-placeholder,
+.coin-thumb-placeholder,
+.token-thumb-placeholder {
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  color: transparent;
+}
+
+/* 0 — Hexagon, purple */
+.coin-placeholder-0 { background-image: url("data:image/svg+xml;utf8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2028%2028'%3E%3Ccircle%20cx%3D'14'%20cy%3D'14'%20r%3D'13'%20fill%3D'%232a2438'%20stroke%3D'%234a3d66'%20stroke-width%3D'1'%2F%3E%3Cpath%20d%3D'M14%206l6.5%203.75v8.5L14%2022l-6.5-3.75v-8.5z'%20fill%3D'none'%20stroke%3D'%23b47dff'%20stroke-width%3D'1.5'%20opacity%3D'0.75'%2F%3E%3Ccircle%20cx%3D'14'%20cy%3D'14'%20r%3D'2.2'%20fill%3D'%23b47dff'%20opacity%3D'0.6'%2F%3E%3C%2Fsvg%3E"); }
+
+/* 1 — Diamond, teal */
+.coin-placeholder-1 { background-image: url("data:image/svg+xml;utf8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2028%2028'%3E%3Ccircle%20cx%3D'14'%20cy%3D'14'%20r%3D'13'%20fill%3D'%231e3832'%20stroke%3D'%233d5a52'%20stroke-width%3D'1'%2F%3E%3Cpath%20d%3D'M14%206l7%208-7%208-7-8z'%20fill%3D'none'%20stroke%3D'%2366d1a1'%20stroke-width%3D'1.5'%20opacity%3D'0.8'%2F%3E%3C%2Fsvg%3E"); }
+
+/* 2 — Triangle, amber */
+.coin-placeholder-2 { background-image: url("data:image/svg+xml;utf8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2028%2028'%3E%3Ccircle%20cx%3D'14'%20cy%3D'14'%20r%3D'13'%20fill%3D'%23382a1e'%20stroke%3D'%235a4a2e'%20stroke-width%3D'1'%2F%3E%3Cpath%20d%3D'M14%207l7%2012H7z'%20fill%3D'none'%20stroke%3D'%23ffaa55'%20stroke-width%3D'1.5'%20opacity%3D'0.8'%2F%3E%3Ccircle%20cx%3D'14'%20cy%3D'16'%20r%3D'1.5'%20fill%3D'%23ffaa55'%20opacity%3D'0.7'%2F%3E%3C%2Fsvg%3E"); }
+
+/* 3 — 4-point star, magenta */
+.coin-placeholder-3 { background-image: url("data:image/svg+xml;utf8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2028%2028'%3E%3Ccircle%20cx%3D'14'%20cy%3D'14'%20r%3D'13'%20fill%3D'%23361e38'%20stroke%3D'%2355385a'%20stroke-width%3D'1'%2F%3E%3Cpath%20d%3D'M14%205%20l2%207.5%207.5%201.5-7.5%201.5-2%207.5-2-7.5L4.5%2014l7.5-1.5z'%20fill%3D'%23ff77c8'%20opacity%3D'0.75'%2F%3E%3C%2Fsvg%3E"); }
+
+/* 4 — Concentric circles, sky blue */
+.coin-placeholder-4 { background-image: url("data:image/svg+xml;utf8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2028%2028'%3E%3Ccircle%20cx%3D'14'%20cy%3D'14'%20r%3D'13'%20fill%3D'%231e2a38'%20stroke%3D'%233d4d5a'%20stroke-width%3D'1'%2F%3E%3Ccircle%20cx%3D'14'%20cy%3D'14'%20r%3D'8'%20fill%3D'none'%20stroke%3D'%2366bfff'%20stroke-width%3D'1.5'%20opacity%3D'0.8'%2F%3E%3Ccircle%20cx%3D'14'%20cy%3D'14'%20r%3D'4'%20fill%3D'none'%20stroke%3D'%2366bfff'%20stroke-width%3D'1'%20opacity%3D'0.65'%2F%3E%3Ccircle%20cx%3D'14'%20cy%3D'14'%20r%3D'1.5'%20fill%3D'%2366bfff'%20opacity%3D'0.8'%2F%3E%3C%2Fsvg%3E"); }
+
+/* 5 — Cross/plus, crimson */
+.coin-placeholder-5 { background-image: url("data:image/svg+xml;utf8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2028%2028'%3E%3Ccircle%20cx%3D'14'%20cy%3D'14'%20r%3D'13'%20fill%3D'%23381e22'%20stroke%3D'%235a3840'%20stroke-width%3D'1'%2F%3E%3Cpath%20d%3D'M14%207v14M7%2014h14'%20stroke%3D'%23ff6b8a'%20stroke-width%3D'2'%20stroke-linecap%3D'round'%20opacity%3D'0.85'%2F%3E%3Ccircle%20cx%3D'14'%20cy%3D'14'%20r%3D'2'%20fill%3D'%23381e22'%2F%3E%3C%2Fsvg%3E"); }
+
+/* Wallet address — monospace, slightly muted, wraps to fit */
+.wallet-full {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 11px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+/* Wallets row under the dashboard page title */
+.wallets-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 10px;
+}
+.wallets-label {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  margin-right: 2px;
+}
+.wallet-chip {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 11px;
+  color: var(--text);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 8px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  transition: border-color .1s, background .1s;
+  user-select: none;
+}
+.wallet-chip:hover { border-color: var(--accent-hover, #8a4dff); }
+.wallet-chip.active {
+  background: rgba(180,77,255,0.15);
+  border-color: var(--accent, #b47dff);
+  color: var(--accent, #b47dff);
+}
+
+/* Tx hash link in the holdings table — full hash, wraps within the cell */
+.tx-hash {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 11px;
+  color: var(--accent);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+.tx-hash:hover { text-decoration: underline; }
+
+/* Fees column — dollar signs in green for "money" feel */
+.mk-fees { color: #7bd1a1; font-weight: 600; letter-spacing: 1px; }
 
 /* 1Y low / high — stacked, low on top (red), high below (green) */
 .mk-lowhigh { display: flex; flex-direction: column; gap: 2px; line-height: 1.25; align-items: flex-end; text-align: right; }
@@ -1173,6 +1363,36 @@ tbody td:nth-child(6) {
   white-space: nowrap;
 }
 .cell-tip-wrap:hover .cell-tip { display: block; }
+
+/* Fee-detail tooltip on the Holdings table: anchored to the right edge
+   of its cell (the column sits near the table's right side), scrollable
+   if too tall, keeps within the table's horizontal bounds. */
+.cell-tip.fee-tip {
+  left: auto;
+  right: 0;
+  transform: none;
+  min-width: 280px;
+  max-width: 340px;
+  max-height: 260px;
+  overflow-y: auto;
+  pointer-events: auto;   /* lets the user hover into the popup to scroll */
+}
+.fee-tip .fee-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+.fee-tip .fee-amount {
+  color: #e87b7b;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.fee-tip .fee-amount.muted-fee {
+  color: var(--muted);
+  font-style: italic;
+  font-weight: 500;
+}
 .th-tip-label {
   display: block;
   font-size: 10px;

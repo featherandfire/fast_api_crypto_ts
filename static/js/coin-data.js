@@ -300,6 +300,35 @@ const COIN_DESCRIPTIONS = {
   USDS:   'Sky Dollar (USDS) is the successor to DAI, issued by Sky (formerly MakerDAO). Like DAI it\'s over-collateralized and decentralized, but offers the Sky Savings Rate (SSR) for native on-chain yield. DAI holders can convert to USDS 1:1 within the Sky ecosystem.',
   GHO:    'GHO is Aave\'s native over-collateralized stablecoin pegged to the US dollar. Borrowers mint GHO by supplying crypto to Aave and pay interest directly to the protocol treasury \u2014 rather than to third-party lenders \u2014 redirecting lending economics to AAVE stakeholders.',
   MNT:    'Mantle (MNT) is an Ethereum layer-2 with a modular architecture separating execution, consensus, and data availability. It has one of the largest L2 treasuries (inherited from the BitDAO merger), which funds ecosystem growth and native yield products like mETH.',
+
+  BUIDL:  'BUIDL is BlackRock\'s USD Institutional Digital Liquidity Fund \u2014 a tokenized money-market fund launched in 2024 on Ethereum in partnership with Securitize. Backed by cash, US Treasuries, and repo agreements, with yield accruing daily. It\'s one of the most significant institutional signals in crypto real-world assets.',
+  OUSG:   'Ondo Short-Term US Government Bond Fund (OUSG) is a tokenized Treasury product by Ondo Finance, aimed at qualified investors. Backed by short-duration US Treasuries and bank deposits, it yields ~4-5% APR that accrues directly into the token price \u2014 bringing traditional fixed-income exposure on-chain.',
+  USTB:   'Superstate Short Duration US Government Securities Fund (USTB) is a tokenized Treasury fund from Superstate, founded by Compound creator Robert Leshner. Backed by short-term US Treasuries and targeting institutional investors, yield accrues to the token price, similar to a money-market fund.',
+  USDTB:  'USDtb is Ethena\'s fully-collateralized stablecoin backed primarily by BlackRock\'s BUIDL fund alongside USDC and T-bills. Unlike its sibling USDe (which uses perpetual-futures hedges), USDtb targets a lower-risk profile using reserve-backed collateral.',
+  USDG:   'Global Dollar (USDG) is a stablecoin issued by Paxos under the Global Dollar Network \u2014 a consortium including Robinhood, Kraken, Galaxy, Nuvei, and Bullish. Backed 1:1 by cash and US Treasuries. Unusually, it shares reserve revenue with participating distributors rather than keeping it at the issuer.',
+  PI:     'Pi Network (PI) is a mobile-first cryptocurrency launched in 2019 that lets users "mine" PI via a daily tap in the Pi app. It boasts 100M+ registered users but only went live on open mainnet in 2025. It\'s widely discussed and equally controversial \u2014 critics have compared its referral-based growth model to MLM patterns.',
+  XDC:    'XDC Network (XDC) is an enterprise-focused layer-1 specialized in trade finance, supply chain, and cross-border payments. It uses a hybrid delegated proof-of-stake consensus with permissioned validators. Partners include major banks digitizing trade documents on-chain.',
+  PUMP:   'Pump (PUMP) is the token of Pump.fun \u2014 the dominant meme-coin launchpad on Solana and responsible for a significant share of daily Solana memecoin volume. PUMP holders receive fee-share revenue from the platform\'s trading activity, making it a direct play on Solana memecoin culture.',
+  BGB:    'Bitget Token (BGB) is the utility token of Bitget, one of the larger global crypto derivatives exchanges. It offers trading fee discounts, Launchpad access, and passive rewards through BGB Earn. Bitget regularly burns BGB using exchange profits to reduce supply.',
+  HTX:    'HTX (formerly Huobi) Token is the native token of HTX exchange, relaunched under the HTX brand with Justin Sun\'s involvement. It provides trading fee discounts, voting on listings, and Launchpad access. Its value is tied to the exchange\'s volume and regulatory posture.',
+  JST:    'JUST (JST) is the governance token of the JustLend and USDJ ecosystem on TRON \u2014 TRON\'s flagship DeFi lending protocol. Its value tracks TRON DeFi activity, particularly stablecoin lending and borrowing against TRX collateral.',
+  SKY:    'Sky (SKY) is the governance token of the Sky protocol \u2014 the rebranded successor to MakerDAO following the 2024 "Endgame" overhaul. SKY replaces MKR (existing MKR holders can convert 1 MKR to 24,000 SKY) and governs risk parameters, stability fees, and protocol upgrades for the USDS stablecoin.',
+  WLFI:   'World Liberty Financial (WLFI) is a DeFi project backed by the Trump family, focused on stablecoins (USD1), lending, and asset management. It is high-profile and polarizing \u2014 its rapid growth is driven largely by political-crypto affinity rather than technical differentiation, and insider allocation is concentrated.',
+  USD1:   'USD1 is a stablecoin issued by World Liberty Financial (the Trump-family-backed DeFi venture), pegged 1:1 to the US dollar and backed by cash and short-term Treasuries. It launched in 2025 and saw rapid adoption driven largely by political-crypto affinity.',
+  DEXE:   'DeXe is a decentralized DAO infrastructure platform \u2014 it provides tools for creating, governing, and managing DAOs, including proposal/voting flows, treasury management, and compliance modules. The DEXE token is used for governance and utility within the DAO toolkit.',
+  FIGR_HELOC: 'FIGR_HELOC represents tokenized home equity lines of credit (HELOCs) originated by Figure Technologies, a major US fintech lender. Each token is backed by real HELOC receivables that yield interest to holders. It runs on the Provenance blockchain \u2014 a landmark real-world-asset (RWA) token bringing private credit on-chain.',
+  HASH:   'Provenance Blockchain (HASH) is a Cosmos-based layer-1 built for regulated financial services \u2014 tokenizing loans, real estate, private equity, and Figure\'s HELOC products. It\'s one of the most actively-used RWA blockchains by on-chain volume. HASH is used for staking, fees, and governance.',
+  USD0:   'USD0 is Usual Protocol\'s permissionless stablecoin, backed by short-term US Treasury bills and redeemable 1:1 for its underlying RWA collateral. It\'s the foundation for USD0++ (the locked, yield-earning version that distributes USUAL token rewards), aiming to democratize RWA yield.',
+  NIGHT:  'Midnight (NIGHT) is a privacy-focused Cardano sidechain using zero-knowledge proofs \u2014 designed for regulated enterprise use cases that require selective data privacy. Built by Charles Hoskinson\'s IOG team. NIGHT pairs with DUST, the utility token used for protocol operations.',
+
+  WBT:    'WhiteBIT Token (WBT) is the utility token of WhiteBIT, a European-regulated crypto exchange headquartered in Lithuania. It provides trading fee discounts, staking rewards (via WhiteBIT Earn), and access to Launchpad offerings. WhiteBIT burns WBT quarterly using exchange revenue.',
+  CC:     'Canton (CC) is the native token of Canton Network \u2014 a privacy-enabled public blockchain built on Digital Asset\'s DAML smart-contract language. It targets regulated financial institutions that need selective on-chain privacy (trades visible only to counterparties and regulators). Backers include Goldman Sachs, BNY Mellon, and Deloitte.',
+  USYC:   'Hashnote US Yield Coin (USYC) is a tokenized money-market fund by Hashnote, offering qualified investors exposure to short-term US Treasuries and reverse repo. Yield (~4-5% APR) accrues into the token price. It\'s one of the larger tokenized T-bill products by AUM on-chain.',
+  BFUSD:  'BFUSD is Binance\'s yield-bearing stablecoin, backed by collateralized futures positions. Holders earn ongoing yield on their balance \u2014 derived from the trading strategies Binance runs on the underlying collateral. It\'s available to Binance users and targets passive on-exchange income.',
+  BDX:    'Beldex (BDX) is a privacy-focused layer-1 built on CryptoNote (the same foundation as Monero). Its ecosystem includes BChat (encrypted messenger), BelNet (decentralized VPN), and BelBrowser \u2014 all using BDX as the payment unit. Staking via masternodes earns yield from block rewards.',
+  ASTER:  'Aster (ASTER) is a BNB-Chain-based perpetual-futures DEX (formerly APX Finance), focused on leveraged trading with deep liquidity and low fees. ASTER holders can stake for fee-share rewards. It became notable for its large airdrop and rapid rise in perpetual-futures volume after a 2025 rebrand.',
+  JTRSY:  'Janus Henderson Anemoy Treasury Fund (JTRSY) is a tokenized US Treasury fund from Janus Henderson, the global asset manager, structured via Anemoy Capital. It\'s restricted to qualified investors and brings institutional-grade fixed income on-chain with regulated custody and auditing.',
+  KAIA:   'Kaia (KAIA) is an Asia-focused layer-1 blockchain formed by the 2024 merger of Klaytn (Kakao-backed) and Finschia (LINE-backed). It integrates directly with LINE\'s 200M+ users and KakaoTalk, giving it one of the largest built-in consumer audiences of any chain. Targets consumer finance, messaging payments, and gaming.',
 };
 
 // ── Coin Features ───────────────────────────────────────────────────────────
@@ -508,9 +537,60 @@ function coinYieldApr(sym) {
   return rates.length ? Math.max(...rates) : null;
 }
 
-// Format annual income on $100 principal. Returns "incalculable" when no
-// APR is parseable from the yield labels.
+// ── Transfer-fee tiers (1 = cheapest, 5 = most expensive) ──────────────────
+// Reflects typical on-chain transfer cost on the coin's primary chain:
+//   1: fractions of a cent     (XRP, XLM, HBAR, ALGO)
+//   2: sub-cent to few cents   (Solana, Cosmos, Polygon, Tron, LTC, DOGE)
+//   3: cents to low dollars    (BNB Chain, Avalanche, Cardano, Ethereum L2s)
+//   4: low dollars             (Bitcoin, Ethereum native transfers)
+//   5: several dollars+        (ERC-20 tokens & DeFi on Ethereum L1)
+const COIN_FEE_TIERS = {
+  // Tier 1 — essentially free
+  XRP: 1, XLM: 1, HBAR: 1, ALGO: 1, IOTA: 1, ICP: 1, PI: 1,
+
+  // Tier 2 — very cheap
+  SOL: 2, JUP: 2, BONK: 2, WIF: 2, PYTH: 2, JTO: 2, RAY: 2, PENGU: 2, TRUMP: 2,
+  XMR: 2, LTC: 2, DOGE: 2, BCH: 2, DASH: 2, ZEC: 2, DCR: 2, BDX: 2,
+  ATOM: 2, OSMO: 2, TIA: 2, INJ: 2, KAVA: 2,
+  NEAR: 2, TON: 2, TRX: 2, KAS: 2, SUI: 2, APT: 2, SEI: 2,
+  XTZ: 2, VET: 2, FTM: 2, HYPE: 2, FLR: 2, XDC: 2,
+  MATIC: 2, POL: 2, FET: 2, AGIX: 2, OCEAN: 2,
+  KAIA: 2, ADA: 2, JST: 2, USDD: 2, NIGHT: 2, BTT: 2,
+  HASH: 2, FIGR_HELOC: 2,
+
+  // Tier 3 — cents to low dollars
+  BNB: 3, CAKE: 3, AVAX: 3, DOT: 3, RUNE: 3, FIL: 3, ETC: 3,
+  ARB: 3, OP: 3, MNT: 3, EIGEN: 3, GMX: 3, IMX: 3, WLD: 3,
+  HNT: 3, STX: 3, CC: 3, ASTER: 3, PUMP: 2, BGB: 3,
+
+  // Tier 4 — a few dollars on a bad day
+  BTC: 4, ETH: 4, WBTC: 4, STETH: 4, WSTETH: 4, RETH: 4,
+
+  // Tier 5 — Ethereum L1 ERC-20s and DeFi
+  LINK: 5, UNI: 5, AAVE: 5, MKR: 5, CRV: 5, COMP: 5, SNX: 5,
+  LDO: 5, ENS: 5, GRT: 5, SHIB: 5, PEPE: 5, FLOKI: 5,
+  MORPHO: 5, ONDO: 5, GHO: 5, PENDLE: 5, ENA: 5, DYDX: 5,
+  RENDER: 5, QNT: 5, NEXO: 5, USDE: 5, USDS: 5, SKY: 5, FRAX: 5,
+  DAI: 5, USDT: 5, USDC: 5, PYUSD: 5, TUSD: 5, RLUSD: 5,
+  BUIDL: 5, OUSG: 5, USTB: 5, USDTB: 5, USDG: 5, USDY: 5, JTRSY: 5, USYC: 5, BFUSD: 5,
+  OKB: 5, KCS: 5, GT: 5, LEO: 5, HTX: 5, WBT: 5,
+  BLUR: 5, BAT: 5, SUSHI: 5, YFI: 5, DEXE: 5,
+  JASMY: 5, GALA: 5, SAND: 5, MANA: 5, AXS: 5, CHZ: 5, APE: 5, ANKR: 5, ENJ: 5, SSV: 5,
+  TAO: 2, AR: 2, PAXG: 5, XAUT: 5, KAU: 5, KAG: 5,
+};
+
+function fmtCoinFees(sym) {
+  const tier = COIN_FEE_TIERS[sym];
+  if (!tier) return '—';
+  return '$'.repeat(tier);
+}
+
+// Format annual income on $100 principal.
+// - "None"         → coin has no yield types listed (matches Yield Types column)
+// - "incalculable" → yields exist but no APR is parseable (e.g. Mining, Lending)
+// - "$X.XX / yr"   → APR parsed from a yield label
 function fmtYieldIncome(sym, principal = 100) {
+  if (!COIN_YIELD_TYPES[sym]) return 'None';
   const apr = coinYieldApr(sym);
   if (apr == null) return 'incalculable';
   return '$' + ((principal * apr) / 100).toFixed(2) + ' / yr';

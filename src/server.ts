@@ -13,7 +13,6 @@ import { authRouter } from './routers/auth.ts';
 import { coinsRouter } from './routers/coins.ts';
 import { cryptocompareRouter } from './routers/cryptocompare.ts';
 import { lookupRouter } from './routers/lookup.ts';
-import { paxosRouter } from './routers/paxos.ts';
 import { portfolioRouter } from './routers/portfolio.ts';
 import { walletRouter } from './routers/wallet.ts';
 
@@ -48,7 +47,6 @@ await app.register(coinsRouter);
 await app.register(walletRouter);
 await app.register(cryptocompareRouter);
 await app.register(lookupRouter);
-await app.register(paxosRouter);
 
 startCCPrefetch();
 startYearlyPrefetch();

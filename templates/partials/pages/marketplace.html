@@ -2,7 +2,7 @@
 
   <div class="page-title-block">
     <h2 class="page-title">Marketplace</h2>
-    <p class="page-subtitle">Top crypto assets not currently traded on Paxos, ranked by price</p>
+    <p class="page-subtitle">Top crypto assets ranked by price</p>
     <div class="coin-stack" x-show="marketplaceCoins.length">
       <template x-for="p in marketplaceCoins.slice((mkPage-1)*mkPerPage, (mkPage-1)*mkPerPage + mkPerPage + 30)" :key="p.base_asset">
         <div class="coin-stack-wrap" @click="mkPinned = (mkPinned === p.base_asset ? null : p.base_asset); mkPage = 1" style="cursor:pointer">
@@ -10,8 +10,9 @@
                :src="p.image || `https://cdn.jsdelivr.net/npm/cryptocurrency-icons@0.18.1/svg/color/${p.base_asset.toLowerCase()}.svg`"
                :alt="p.base_asset"
                @error="$el.style.display='none'; $el.nextElementSibling.style.display='flex'" />
-          <div class="coin-stack-icon coin-stack-fallback" style="display:none"
-               x-text="p.base_asset.charAt(0)"></div>
+          <div class="coin-stack-icon coin-stack-fallback"
+               :class="'coin-placeholder-' + unknownCoinShape(p.base_asset)"
+               style="display:none"></div>
           <span class="coin-stack-tip" x-text="p.base_asset"></span>
         </div>
       </template>
@@ -28,14 +29,11 @@
       <div style="display:flex; align-items:center; gap:8px; margin-left:auto">
         <select class="mk-sort-select" x-model="mkSort" @change="mkPage = 1">
           <option value="price_desc">Highest Price</option>
-          <option value="top10">Top 10 Highest Price</option>
-          <option value="stablecoin">Stablecoins</option>
-          <option value="most_volatile">Most Volatile</option>
-          <option value="least_volatile">Least Volatile</option>
-          <option value="vol_low">Volatility: Low</option>
-          <option value="vol_moderate">Volatility: Moderate</option>
-          <option value="vol_high">Volatility: High</option>
-          <option value="vol_very_high">Volatility: Very High</option>
+          <option value="price_asc">Lowest Price</option>
+          <option value="vol_desc">Highest Volatility</option>
+          <option value="vol_asc">Lowest Volatility</option>
+          <option value="stablecoin">Stablecoin</option>
+          <option value="income_yield">Income by Yield</option>
         </select>
         <input class="input input-sm mk-search-input" type="text" placeholder="Search coins..."
                x-model="mkSearch" @input="mkPage = 1" />
@@ -58,9 +56,10 @@
             <th><div class="th-tip-wrap">Volatility<div class="th-tip"><span class="th-tip-label">Refreshed every:</span><span class="th-tip-val">24 hours</span></div></div></th>
             <th><div class="th-tip-wrap">Last Price<div class="th-tip"><span class="th-tip-label">Refreshed every:</span><span class="th-tip-val">Every refresh</span></div></div></th>
             <th><div class="th-tip-wrap">Market Cap<div class="th-tip"><span class="th-tip-label">Refreshed every:</span><span class="th-tip-val">5 minutes</span></div></div></th>
+            <th><div class="th-tip-wrap">Fees<div class="th-tip"><span class="th-tip-label">Scale:</span><span class="th-tip-val">$ = nearly free → $$$$$ = expensive (ERC-20 on Ethereum L1)</span></div></div></th>
             <th><div class="th-tip-wrap">1Y Low / High<div class="th-tip"><span class="th-tip-label">Refreshed every:</span><span class="th-tip-val">24 hours</span></div></div></th>
             <th><div class="th-tip-wrap">% Purchased<div class="th-tip"><span class="th-tip-label">Refreshed every:</span><span class="th-tip-val">24 hours</span></div></div></th>
-            <th><div class="th-tip-wrap">Currency Backed By<div class="th-tip"><span class="th-tip-label">Refreshed every:</span><span class="th-tip-val">Never — static</span></div></div></th>
+            <th><div class="th-tip-wrap">Backed By<div class="th-tip"><span class="th-tip-label">Refreshed every:</span><span class="th-tip-val">Never — static</span></div></div></th>
             <th><div class="th-tip-wrap">Yield Types<div class="th-tip"><span class="th-tip-label">Refreshed every:</span><span class="th-tip-val">Never — static</span></div></div></th>
             <th><div class="th-tip-wrap">Income by Yield<div class="th-tip"><span class="th-tip-label">Based on:</span><span class="th-tip-val">$100 at highest published APR</span></div></div></th>
             <th><div class="th-tip-wrap">Description<div class="th-tip"><span class="th-tip-label">Refreshed every:</span><span class="th-tip-val">Never — static</span></div></div></th>
@@ -75,7 +74,8 @@
                     <img class="coin-img" :src="p.image" :alt="p.base_asset" />
                   </template>
                   <template x-if="!p.image">
-                    <div class="coin-img-placeholder" x-text="p.base_asset.charAt(0)"></div>
+                    <div class="coin-img-placeholder"
+                         :class="'coin-placeholder-' + unknownCoinShape(p.base_asset)"></div>
                   </template>
                   <div>
                     <div class="coin-name" x-text="p.coinName || p.base_asset"></div>
@@ -128,6 +128,7 @@
               </td>
               <td x-text="fmtPaxosPrice(p.last)"></td>
               <td x-text="fmtMktCap(p.mktCap)"></td>
+              <td><span class="mk-fees" x-text="fmtCoinFees(p.base_asset)"></span></td>
               <td>
                 <template x-if="p.low != null && p.high != null">
                   <div class="mk-lowhigh">
@@ -173,7 +174,7 @@
               <td x-text="fmtYieldIncome(p.base_asset)"></td>
               <td>
                 <div class="coin-desc-wrap" x-data="{ descOpen: false }" @mouseenter="descOpen = true" @mouseleave="descOpen = false">
-                  <span class="coin-desc-text" x-text="paxosCoinDescription(p.base_asset) || '—'"></span>
+                  <span class="coin-desc-text" x-text="paxosCoinDescription(p.base_asset) || 'obscure'"></span>
                   <div class="coin-desc-popup" x-show="descOpen && paxosCoinDescription(p.base_asset)" x-cloak x-text="paxosCoinDescription(p.base_asset)"></div>
                 </div>
               </td>
